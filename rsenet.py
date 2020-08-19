@@ -73,6 +73,7 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], num_classes=1000
     RESNET_NAMES = ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
                     'resnext50_32x4d', 'resnext101_32x8d',
                     'wide_resnet50_2', 'wide_resnet101_2']
+    assert resnet_name in RESNET_NAMES, f'resnet_name must be one of {RESNET_NAMES}'
     RESNET_BLOCKS = {
         'resnet18': BasicBlock,
         'resnet34': BasicBlock,
