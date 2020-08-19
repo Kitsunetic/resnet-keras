@@ -6,15 +6,15 @@ from keras.models import Model
 
 def BasicBlock(x, out_channels, strides=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
     h = x
-
     x = L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
     x = L.BatchNormalization()(x)
     x = activation()(x)
-    x = L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
+    x = L.Conv2D(out_channels, 3, padding='same')(x)
     x = L.BatchNormalization()(x)
 
-    if h.shape[-1] != x.shape[-1]:
+    if h.shape[-1] != x.shape[-1] or strides != 1:
         h = L.Conv2D(out_channels, 1, strides=strides, padding='same')(h)
+        h = L.BatchNormalization()(h)
 
     x = L.add([x, h])
     x = activation()(x)
@@ -22,21 +22,23 @@ def BasicBlock(x, out_channels, strides=1, base_width=64, groups=1, activation=L
     return x
 
 
-def Bottleneck(x, out_channels, strides=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
-    def _grouped_CNN2D(x, out_channels, groups, strides=1):
+def Bottleneck(x, out_channels, strides=1, dilation=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
+    def _grouped_Conv2D(x, out_channels, groups, strides=1):
         if groups == 1:
             # group == 1: normal CNN
             return L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
         else:
             assert x.shape[-1] % groups == 0
             assert out_channels % groups == 0
+
             grouped_in_channels = x.shape[-1] // groups
             grouped_out_channels = out_channels // groups
-            group_list = []
 
+            group_list = []
             for g in range(groups):
                 h = L.Lambda(lambda z: z[:, :, :, g * grouped_in_channels:(g + 1) * grouped_in_channels])(x)
-                h = L.Conv2D(grouped_out_channels, 3, strides=strides, padding='same', use_bias=False)(h)
+                h = L.Conv2D(grouped_out_channels, 3, strides=strides, dilation_rate=dilation,
+                             padding='same', use_bias=False)(h)
                 group_list.append(h)
 
             return L.concatenate(group_list, axis=-1)
@@ -44,16 +46,17 @@ def Bottleneck(x, out_channels, strides=1, base_width=64, groups=1, activation=L
     width = int(out_channels * (base_width / 64.)) * groups
     h = x
 
-    x = L.Conv2D(width, 1, strides=strides, padding='same')(x)
+    x = L.Conv2D(width, 1, padding='same')(x)
     x = L.BatchNormalization()(x)
-    x = _grouped_CNN2D(x, width, groups, strides=strides)
+    x = _grouped_Conv2D(x, width, groups, strides=strides)
     x = L.BatchNormalization()(x)
-    x = L.Conv2D(out_channels * 4, strides=strides, padding='same')(x)
+    x = L.Conv2D(out_channels * 4, 1, padding='same')(x)
     x = L.BatchNormalization()(x)
     x = activation()(x)
 
-    if h.shape[-1] != x.shape[-1]:
+    if h.shape[-1] != x.shape[-1] or strides != 1:
         h = L.Conv2D(out_channels * 4, 1, strides=strides, padding='same')(h)
+        h = L.BatchNormalization()(h)
 
     x = L.add([x, h])
     x = activation()(x)
@@ -61,10 +64,13 @@ def Bottleneck(x, out_channels, strides=1, base_width=64, groups=1, activation=L
     return x
 
 
-def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], strides=1, num_classes=1000, activation=L.ReLU) -> Model:
+def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], num_classes=1000, activation=L.ReLU) -> Model:
     """
 
-    :param resnet_name:
+    :param resnet_name: Name of resnet.
+            One of ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
+                    'resnext50_32x4d', 'resnext101_32x8d',
+                    'wide_resnet50_2', 'wide_resnet101_2']
     :param input_shape:
     :param num_classes:
     :param activation:
@@ -73,7 +79,6 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], strides=1, num_c
     RESNET_NAMES = ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
                     'resnext50_32x4d', 'resnext101_32x8d',
                     'wide_resnet50_2', 'wide_resnet101_2']
-    assert resnet_name in RESNET_NAMES, f'resnet_name must be one of {RESNET_NAMES}'
     RESNET_BLOCKS = {
         'resnet18': BasicBlock,
         'resnet34': BasicBlock,
@@ -119,14 +124,18 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], strides=1, num_c
         'wide_resnet101_2': 1
     }
 
+    resnet_name = resnet_name.lower()
+    assert resnet_name in RESNET_NAMES, f'resnet_name must be one of {RESNET_NAMES}'
+
     block = RESNET_BLOCKS[resnet_name]
     layers = RESNET_LAYERS[resnet_name]
     width = RESNET_WIDTHS[resnet_name]
     groups = RESNET_GROUPS[resnet_name]
 
     def _make_layer(x, out_channels, blocks, strides=1):
-        for _ in range(blocks):
-            x = block(x, out_channels, strides=strides, base_width=width, groups=groups, activation=activation)
+        x = block(x, out_channels, strides=strides, base_width=width, groups=groups, activation=activation)
+        for _ in range(1, blocks):
+            x = block(x, out_channels, base_width=width, groups=groups, activation=activation)
         return x
 
     inputs = L.Input(shape=input_shape)
@@ -142,7 +151,6 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], strides=1, num_c
     x = _make_layer(x, 512, layers[3], strides=2)
 
     x = L.GlobalAveragePooling2D()(x)
-    x = L.Flatten()(x)
     x = L.Dense(num_classes, activation='softmax')(x)
 
-    return x
+    return Model(inputs=inputs, outputs=x)
