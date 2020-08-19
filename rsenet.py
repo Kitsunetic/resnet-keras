@@ -4,17 +4,17 @@ from keras import layers as L
 from keras.models import Model
 
 
-def BasicBlock(x, out_channels, stride=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
+def BasicBlock(x, out_channels, strides=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
     h = x
 
-    x = L.Conv2D(out_channels, 3, strides=stride, padding='same')(x)
+    x = L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
     x = L.BatchNormalization()(x)
     x = activation()(x)
-    x = L.Conv2D(out_channels, 3, strides=stride, padding='same')(x)
+    x = L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
     x = L.BatchNormalization()(x)
 
     if h.shape[-1] != x.shape[-1]:
-        h = L.Conv2D(out_channels, 1, strides=stride, padding=1)(h)
+        h = L.Conv2D(out_channels, 1, strides=strides, padding='same')(h)
 
     x = L.add([x, h])
     x = activation()(x)
@@ -22,7 +22,7 @@ def BasicBlock(x, out_channels, stride=1, base_width=64, groups=1, activation=L.
     return x
 
 
-def Bottleneck(x, out_channels, stride=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
+def Bottleneck(x, out_channels, strides=1, base_width=64, groups=1, activation=L.ReLU) -> L.Layer:
     def _grouped_CNN2D(x, out_channels, groups, strides=1):
         if groups == 1:
             # group == 1: normal CNN
@@ -44,16 +44,16 @@ def Bottleneck(x, out_channels, stride=1, base_width=64, groups=1, activation=L.
     width = int(out_channels * (base_width / 64.)) * groups
     h = x
 
-    x = L.Conv2D(width, 1, strides=stride, padding='same')(x)
+    x = L.Conv2D(width, 1, strides=strides, padding='same')(x)
     x = L.BatchNormalization()(x)
-    x = _grouped_CNN2D(x, width, groups, strides=stride)
+    x = _grouped_CNN2D(x, width, groups, strides=strides)
     x = L.BatchNormalization()(x)
-    x = L.Conv2D(out_channels * 4, strides=stride, padding='same')(x)
+    x = L.Conv2D(out_channels * 4, strides=strides, padding='same')(x)
     x = L.BatchNormalization()(x)
     x = activation()(x)
 
     if h.shape[-1] != x.shape[-1]:
-        h = L.Conv2D(out_channels * 4, 1, strides=stride, padding='same')(h)
+        h = L.Conv2D(out_channels * 4, 1, strides=strides, padding='same')(h)
 
     x = L.add([x, h])
     x = activation()(x)
