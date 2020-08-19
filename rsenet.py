@@ -26,7 +26,7 @@ def Bottleneck(x, out_channels, stride=1, base_width=64, groups=1, activation=L.
     def _grouped_CNN2D(x, out_channels, groups, strides=1):
         if groups == 1:
             # group == 1: normal CNN
-            x = L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
+            return L.Conv2D(out_channels, 3, strides=strides, padding='same')(x)
         else:
             assert x.shape[-1] % groups == 0
             assert out_channels % groups == 0
