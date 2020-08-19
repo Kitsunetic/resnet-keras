@@ -61,7 +61,7 @@ def Bottleneck(x, out_channels, strides=1, base_width=64, groups=1, activation=L
     return x
 
 
-def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], num_classes=1000, activation=L.ReLU) -> Model:
+def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], strides=1, num_classes=1000, activation=L.ReLU) -> Model:
     """
 
     :param resnet_name:
@@ -124,9 +124,9 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], num_classes=1000
     width = RESNET_WIDTHS[resnet_name]
     groups = RESNET_GROUPS[resnet_name]
 
-    def _make_layer(x, out_channels, blocks, stride=1):
+    def _make_layer(x, out_channels, blocks, strides=1):
         for _ in range(blocks):
-            x = block(x, out_channels, stride=stride, base_width=width, groups=groups, activation=activation)
+            x = block(x, out_channels, strides=strides, base_width=width, groups=groups, activation=activation)
         return x
 
     inputs = L.Input(shape=input_shape)
@@ -136,10 +136,10 @@ def ResNet(resnet_name: str, input_shape: Tuple[int, int, int], num_classes=1000
     x = activation()(x)
     x = L.MaxPool2D()(x)
 
-    x = _make_layer(x, 64, layers[0], stride=1)
-    x = _make_layer(x, 128, layers[1], stride=2)
-    x = _make_layer(x, 256, layers[2], stride=2)
-    x = _make_layer(x, 512, layers[3], stride=2)
+    x = _make_layer(x, 64, layers[0], strides=1)
+    x = _make_layer(x, 128, layers[1], strides=2)
+    x = _make_layer(x, 256, layers[2], strides=2)
+    x = _make_layer(x, 512, layers[3], strides=2)
 
     x = L.GlobalAveragePooling2D()(x)
     x = L.Flatten()(x)
